@@ -130,9 +130,6 @@ class _InTimeDepLogPageState extends State<InTimeDepLogPage>
                       padding: const EdgeInsets.symmetric(horizontal: 15),
                       child: ExtendedText(
                         content!,
-                        selectionHeightStyle: BoxHeightStyle.max,
-                        selectionEnabled: true,
-                        selectionWidthStyle: BoxWidthStyle.max,
                         style: const TextStyle(
                           fontSize: 12,
                         ),

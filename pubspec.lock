@@ -301,18 +301,18 @@ packages:
     dependency: "direct main"
     description:
       name: extended_text
-      sha256: d3fc3c3b13d134d3183fc653a5cf1e66a88c41ab3f2648024ba38052e0e38419
+      sha256: "32119a9447888fe97f506df6c87e23744ea2dbdf25a75fd713030cc7bc055c3a"
       url: "https://pub.flutter-io.cn"
     source: hosted
-    version: "9.1.2"
+    version: "11.2.0"
   extended_text_library:
     dependency: transitive
     description:
       name: extended_text_library
-      sha256: "3538b6ab1c177071b7897bc059d666ba289a042d2142e9f647b7ccbc3e65496b"
+      sha256: f6ae456324ff6ba3f9fe560a5c12f51ec02c5f463ef5a02bf165b678f049d547
       url: "https://pub.flutter-io.cn"
     source: hosted
-    version: "9.1.1"
+    version: "11.1.0"
   fake_async:
     dependency: transitive
     description:

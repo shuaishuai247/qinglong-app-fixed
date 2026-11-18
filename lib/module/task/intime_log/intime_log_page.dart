@@ -154,9 +154,6 @@ class _InTimeLogPageState extends ConsumerState<InTimeLogPage> with LazyLoadStat
                           width: MediaQuery.of(context).size.width,
                           child: ExtendedText(
                             content!,
-                            selectionHeightStyle: BoxHeightStyle.max,
-                            selectionEnabled: true,
-                            selectionWidthStyle: BoxWidthStyle.max,
                             style: const TextStyle(
                               fontSize: 12,
                             ),
