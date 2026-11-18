@@ -1,4 +1,3 @@
-import 'package:dio_log/dio_log.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -163,13 +162,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             ),
                             GestureDetector(
                               onDoubleTap: () {
-                                if (debugBtnIsShow()) {
-                                  dismissDebugBtn();
-                                } else {
-                                  showDebugBtn(context,
-                                      btnColor: ref.watch(themeProvider).primaryColor);
-                                }
-                                WidgetsBinding.instance.endOfFrame;
+                                // dio_log debug entry removed (incompatible with Flutter 3.27)
                               },
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(5),

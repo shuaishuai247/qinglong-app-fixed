@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:dio/adapter.dart';
 import 'package:dio/dio.dart';
-import 'package:dio_log/dio_log.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
@@ -43,7 +42,6 @@ class Http {
         contentType: "application/json",
       ),
     );
-    _dio?.interceptors.add(DioLogInterceptor());
     _dio?.interceptors.add(PrettyDioLogger());
 
     _dio?.interceptors.add(TokenInterceptor(

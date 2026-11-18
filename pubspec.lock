@@ -281,14 +281,6 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "4.0.6"
-  dio_log:
-    dependency: "direct main"
-    description:
-      name: dio_log
-      sha256: bf5ae847695277999d46e8089e74ec9fdf092f1d91299712d72ba5449ba13374
-      url: "https://pub.flutter-io.cn"
-    source: hosted
-    version: "2.0.4"
   drag_and_drop_lists:
     dependency: "direct main"
     description:
@@ -519,10 +511,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_slidable
-      sha256: "6c68e1fad129b4b807b2218ef4cf7f7f6f61c5ec8861c990dc2278d9d03cb09f"
+      sha256: a857de7ea701f276fd6a6c4c67ae885b60729a3449e42766bb0e655171042801
       url: "https://pub.flutter-io.cn"
     source: hosted
-    version: "2.0.0"
+    version: "3.1.2"
   flutter_spinkit:
     dependency: transitive
     description:
