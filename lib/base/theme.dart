@@ -165,7 +165,7 @@ class ThemeViewModel extends ChangeNotifier {
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: _primaryColor,
       ),
-      tabBarTheme: TabBarTheme(
+      tabBarTheme: TabBarThemeData(
         labelStyle: const TextStyle(
           fontSize: 14,
         ),
@@ -289,7 +289,7 @@ class ThemeViewModel extends ChangeNotifier {
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: _primaryColor,
       ),
-      tabBarTheme: TabBarTheme(
+      tabBarTheme: TabBarThemeData(
         labelStyle: const TextStyle(
           fontSize: 14,
         ),
@@ -407,7 +407,7 @@ class ThemeViewModel extends ChangeNotifier {
           borderRadius: BorderRadius.circular(4),
         ),
       ),
-      tabBarTheme: const TabBarTheme(
+      tabBarTheme: const TabBarThemeData(
         labelStyle: TextStyle(
           fontSize: 14,
         ),

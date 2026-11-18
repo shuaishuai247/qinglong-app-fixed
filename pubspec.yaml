@@ -4,8 +4,8 @@ publish_to: 'none'
 version: 3.0.0+300
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
-  flutter: ">=3.27.0"
+  sdk: ">=3.7.0 <4.0.0"
+  flutter: ">=3.29.0"
 
 
 dependencies:
@@ -22,7 +22,7 @@ dependencies:
   dio: ^4.0.6
   json_conversion_annotation: ^0.0.4
   logger: ^1.1.0
-  intl: 0.19.0
+  intl: 0.20.3
   get_it: ^7.2.0
   highlight: ^0.7.0
   drag_and_drop_lists: ^0.3.3
@@ -50,7 +50,7 @@ dependencies:
   launch_review: ^3.0.1
   flutter_scroll_to_top: ^2.3.0
   json_table: ^2.0.1
-  extended_text: 14.2.2
+  extended_text: 15.0.2
   lottie: ^2.0.0
   quick_actions: ^1.0.1
   webview_flutter: 3.0.4
