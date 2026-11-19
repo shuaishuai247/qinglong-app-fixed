@@ -14,7 +14,6 @@ import 'package:qinglong_app/base/ui/bottom_nav_bar.dart';
 import 'package:qinglong_app/main.dart';
 import 'package:qinglong_app/module/config/config_page.dart';
 import 'package:qinglong_app/module/env/env_page.dart';
-import 'package:qinglong_app/module/home/script_home_page.dart';
 import 'package:qinglong_app/module/home/version_history_bean.dart';
 import 'package:qinglong_app/module/others/other_page.dart';
 import 'package:qinglong_app/module/task/task_page.dart';
@@ -223,7 +222,109 @@ class HomePageState extends ConsumerState<HomePage> {
             RepaintBoundary(
               child: Scaffold(
                 extendBody: true,
-                body: const ScriptHomePage(),
+                body: IndexedStack(
+                  index: ref.watch<int>(SingleAccountPageState.ofHomeIndexProvider(context)(
+                      getProviderName(context))),
+                  children: [
+                    Positioned.fill(
+                      child: TaskPage(
+                        key: taskKey,
+                        loading: !getSystemBeanSuccess,
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: EnvPage(
+                        key: envKey,
+                      ),
+                    ),
+                    const Positioned.fill(
+                      child: ConfigPage(),
+                    ),
+                    Positioned.fill(
+                      child: OtherPage(
+                        key: meKey,
+                      ),
+                    ),
+                  ],
+                ),
+                bottomNavigationBar: ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+                    child: Container(
+                      height: kBottomNavigationBarHeight + MediaQuery.of(context).padding.bottom,
+                      width: MediaQuery.of(context).size.width,
+                      color: ref
+                          .watch(themeProvider)
+                          .currentTheme
+                          .bottomNavigationBarTheme
+                          .backgroundColor,
+                      child: BottomNavigationBar2(
+                        backgroundColor: Colors.transparent,
+                        items: titles
+                            .map(
+                              (e) => BottomNavigationBarItem(
+                                icon: Image.asset(
+                                  e.icon,
+                                  fit: BoxFit.cover,
+                                  width: 20,
+                                  height: 20,
+                                ),
+                                activeIcon: Image.asset(
+                                  e.checkedIcon,
+                                  fit: BoxFit.cover,
+                                  width: 20,
+                                  height: 20,
+                                ),
+                                label: e.title,
+                              ),
+                            )
+                            .toList(),
+                        currentIndex: ref.watch<int>(SingleAccountPageState.ofHomeIndexProvider(
+                            context)(getProviderName(context))),
+                        onTap: (index) async {
+                          if (ref.read<int>((SingleAccountPageState.ofHomeIndexProvider(context)(
+                                  getProviderName(context)))) ==
+                              index) {
+                            if (ref.read<int>((SingleAccountPageState.ofHomeIndexProvider(context)(
+                                    getProviderName(context)))) ==
+                                0) {
+                              await taskKey.currentState?.move2Top();
+                            } else if (ref.read<int>((SingleAccountPageState.ofHomeIndexProvider(
+                                    context)(getProviderName(context)))) ==
+                                1) {
+                              await envKey.currentState?.move2Top();
+                            } else if (ref.read<int>((SingleAccountPageState.ofHomeIndexProvider(
+                                    context)(getProviderName(context)))) ==
+                                3) {
+                              await meKey.currentState?.move2Top();
+                            }
+                            return;
+                          } else {
+                            ref
+                                .read(SingleAccountPageState.ofHomeIndexProvider(context)(
+                                        getProviderName(context))
+                                    .notifier)
+                                .state = index;
+                          }
+                        },
+                        elevation: 0,
+                        selectedFontSize: 12,
+                        unselectedFontSize: 12,
+                        type: BottomNavigationBarType.fixed,
+                        showSelectedLabels: true,
+                        showUnselectedLabels: true,
+                        onLongTap: (index) async {
+                          if (index == 3) {
+                            HapticFeedback.mediumImpact();
+                            setState(() {
+                              showMask = true;
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
             Visibility(
