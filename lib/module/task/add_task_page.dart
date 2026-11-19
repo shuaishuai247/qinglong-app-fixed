@@ -155,6 +155,10 @@ class _AddTaskPageState extends ConsumerState<AddTaskPage> with LazyLoadState<Ad
                   const SizedBox(
                     height: 10,
                   ),
+                  _buildCronPresets(),
+                  const SizedBox(
+                    height: 10,
+                  ),
                   TextField(
                     controller: _cronController,
                     minLines: 1,
@@ -217,6 +221,69 @@ class _AddTaskPageState extends ConsumerState<AddTaskPage> with LazyLoadState<Ad
   }
 
   GlobalKey<UploadScriptWidgetState> fileKey = GlobalKey();
+
+  /// 常用定时规则快捷选择（点选自动填充 cron 表达式）
+  Widget _buildCronPresets() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        _presetChip("每15分钟", "*/15 * * * *"),
+        _presetChip("每30分钟", "*/30 * * * *"),
+        _presetChip("每小时", "0 * * * *"),
+        _timePresetChip("每天", "*"),
+        _timePresetChip("工作日", "1-5"),
+        _timePresetChip("每周一", "1"),
+      ],
+    );
+  }
+
+  Widget _presetChip(String label, String cron) {
+    return ActionChip(
+      visualDensity: VisualDensity.compact,
+      backgroundColor:
+          ref.watch(themeProvider).currentTheme.cardColor,
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: ref.watch(themeProvider).primaryColor,
+        ),
+      ),
+      onPressed: () {
+        setState(() {
+          _cronController.text = cron;
+        });
+      },
+    );
+  }
+
+  Widget _timePresetChip(String label, String weekday) {
+    return ActionChip(
+      visualDensity: VisualDensity.compact,
+      backgroundColor:
+          ref.watch(themeProvider).currentTheme.cardColor,
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: ref.watch(themeProvider).primaryColor,
+        ),
+      ),
+      onPressed: () async {
+        TimeOfDay? time = await showTimePicker(
+          context: context,
+          initialTime: const TimeOfDay(hour: 8, minute: 0),
+        );
+        if (time != null) {
+          setState(() {
+            _cronController.text =
+                "${time.minute} ${time.hour} * * $weekday";
+          });
+        }
+      },
+    );
+  }
 
   void submit() async {
     if (_nameController.text.isEmpty) {
