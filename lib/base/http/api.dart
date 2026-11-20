@@ -482,11 +482,14 @@ class Api {
   }
 
   Future<HttpResponse<String>> scriptDetail(String name, String? path) async {
+    // 根目录脚本 path 为空时不能传空参数，否则面板校验报 Invalid path format
+    final Map<String, dynamic> params = {};
+    if (path != null && path.isNotEmpty) {
+      params["path"] = path;
+    }
     return await getIt<Http>(instanceName: index.toString()).get<String>(
       getIt<Url>(instanceName: index.toString()).scriptDetailForReadFile + name,
-      {
-        "path": path,
-      },
+      params,
     );
   }
 
