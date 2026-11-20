@@ -482,14 +482,29 @@ class Api {
   }
 
   Future<HttpResponse<String>> scriptDetail(String name, String? path) async {
-    // 根目录脚本 path 为空时不能传空参数，否则面板校验报 Invalid path format
+    // 新版面板(2026-08之后)已下线 GET /scripts/:file，且路径含中文文件名会被
+    // protectedPathCase 中间件以 "Invalid path format" 拒绝（URL 编码产生大写 hex）。
+    // 改用 /scripts/detail，文件名放 query 参数；旧版面板无此接口时回退旧路径。
     final Map<String, String?> params = {};
     if (path != null && path.isNotEmpty) {
       params["path"] = path;
     }
+    params["file"] = name;
+    final HttpResponse<String> resp = await getIt<Http>(instanceName: index.toString()).get<String>(
+      getIt<Url>(instanceName: index.toString()).scriptFileDetail,
+      params,
+    );
+    if (resp.success) {
+      return resp;
+    }
+    // 旧版面板没有 /scripts/detail，回退旧接口（旧面板无路径大小写校验，中文可放路径）
+    final Map<String, String?> oldParams = {};
+    if (path != null && path.isNotEmpty) {
+      oldParams["path"] = path;
+    }
     return await getIt<Http>(instanceName: index.toString()).get<String>(
       getIt<Url>(instanceName: index.toString()).scriptDetailForReadFile + name,
-      params,
+      oldParams,
     );
   }
 
