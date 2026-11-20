@@ -483,7 +483,7 @@ class Api {
 
   Future<HttpResponse<String>> scriptDetail(String name, String? path) async {
     // 根目录脚本 path 为空时不能传空参数，否则面板校验报 Invalid path format
-    final Map<String, dynamic> params = {};
+    final Map<String, String?> params = {};
     if (path != null && path.isNotEmpty) {
       params["path"] = path;
     }
