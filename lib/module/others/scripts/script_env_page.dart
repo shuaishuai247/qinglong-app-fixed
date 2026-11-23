@@ -121,7 +121,8 @@ class _ScriptEnvPageState extends ConsumerState<ScriptEnvPage> {
 
   Widget _buildEnvItem(BuildContext context, EnvBean env) {
     var theme = ref.watch(themeProvider);
-    bool disabled = env.status == 0 || env.status == 4;
+    // 青龙面板约定：status 0=已启用，1=已停用（与原版环境变量页一致）
+    bool disabled = env.status == 1;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
