@@ -18,6 +18,8 @@ import 'package:qinglong_app/module/task/task_page.dart';
 import 'package:qinglong_app/utils/extension.dart';
 
 import '../../../base/cupertino_sheet.dart';
+import '../../../main.dart';
+import '../../home/system_bean.dart';
 
 /// 主页脚本卡片页：每个脚本一张卡片，
 /// 第一行：脚本名 + 日志/运行/停止
@@ -33,6 +35,7 @@ class HomeScriptPageState extends ConsumerState<HomeScriptPage> {
   List<ScriptData> files = [];
   List<TaskBean> tasks = [];
   bool loading = true;
+  bool loadError = false;
 
   ScrollController controller = ScrollController();
 
@@ -42,41 +45,61 @@ class HomeScriptPageState extends ConsumerState<HomeScriptPage> {
     }
   }
 
+  /// 等待登录/系统信息初始化完成（SystemBean 注册成功），最多等 15 秒
+  Future<void> _waitReady() async {
+    for (int i = 0; i < 30; i++) {
+      try {
+        getIt<SystemBean>(instanceName: (SingleAccountPageState.of(context)?.index ?? 0).toString());
+        return;
+      } catch (e) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+    }
+  }
+
   Future<void> load() async {
-    HttpResponse<List<ScriptData>> response = await SingleAccountPageState.ofApi(context).scripts();
-    if (response.success) {
-      // 展平脚本树，只保留文件节点
-      List<ScriptData> result = [];
-      void walk(List<ScriptData> nodes) {
-        for (final n in nodes) {
-          if (n.isParent) {
-            if (n.title != "node_modules") {
-              walk(n.children);
+    try {
+      await _waitReady();
+      HttpResponse<List<ScriptData>> response = await SingleAccountPageState.ofApi(context).scripts();
+      if (response.success) {
+        // 展平脚本树，只保留文件节点
+        List<ScriptData> result = [];
+        void walk(List<ScriptData> nodes) {
+          for (final n in nodes) {
+            if (n.isParent) {
+              if (n.title != "node_modules") {
+                walk(n.children);
+              }
+            } else {
+              result.add(n);
             }
-          } else {
-            result.add(n);
           }
         }
-      }
 
-      walk(response.bean ?? []);
-      files = result;
-      // 同步拉取定时任务，用于卡片上的任务操作
-      try {
-        HttpResponse<List<TaskBean>> taskResp = await SingleAccountPageState.ofApi(context).crons();
-        if (taskResp.success) {
-          tasks = taskResp.bean ?? [];
+        walk(response.bean ?? []);
+        files = result;
+        loadError = false;
+        // 同步拉取定时任务，用于卡片上的任务操作
+        try {
+          HttpResponse<List<TaskBean>> taskResp = await SingleAccountPageState.ofApi(context).crons();
+          if (taskResp.success) {
+            tasks = taskResp.bean ?? [];
+          }
+        } catch (e) {
+          tasks = [];
         }
-      } catch (e) {
-        tasks = [];
+      } else {
+        loadError = true;
+        response.message?.toast();
       }
-    } else {
-      response.message?.toast();
-    }
-    if (mounted) {
-      setState(() {
-        loading = false;
-      });
+    } catch (e) {
+      loadError = true;
+    } finally {
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
     }
   }
 
@@ -168,7 +191,36 @@ class HomeScriptPageState extends ConsumerState<HomeScriptPage> {
         ),
         body: loading
             ? const Center(child: LoadingWidget())
-            : RefreshIndicator(
+            : loadError && files.isEmpty
+                ? ListView(
+                    children: [
+                      const SizedBox(height: 120),
+                      Center(
+                        child: Text(
+                          "加载失败，请检查网络和面板地址",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: theme.themeColor.titleColor(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Center(
+                        child: TextButton(
+                          onPressed: () {
+                            setState(() {
+                              loading = true;
+                              loadError = false;
+                            });
+                            load();
+                          },
+                          child: const Text("点击重试"),
+                        ),
+                      ),
+                    ],
+                  )
+                : RefreshIndicator(
                 color: theme.primaryColor,
                 onRefresh: () async {
                   await load();
