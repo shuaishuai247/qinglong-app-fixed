@@ -16,7 +16,7 @@ import 'package:qinglong_app/module/config/config_page.dart';
 import 'package:qinglong_app/module/env/env_page.dart';
 import 'package:qinglong_app/module/home/version_history_bean.dart';
 import 'package:qinglong_app/module/others/other_page.dart';
-import 'package:qinglong_app/module/task/task_page.dart';
+import 'package:qinglong_app/module/others/scripts/home_script_page.dart';
 import 'package:move_to_background/move_to_background.dart';
 import 'package:qinglong_app/utils/extension.dart';
 import 'package:qinglong_app/utils/login_helper.dart';
@@ -204,7 +204,7 @@ class HomePageState extends ConsumerState<HomePage> {
 
   bool showMask = false;
 
-  GlobalKey<TaskPageState> taskKey = GlobalKey();
+  GlobalKey<HomeScriptPageState> scriptHomeKey = GlobalKey();
   GlobalKey<EnvPageState> envKey = GlobalKey();
   GlobalKey<OtherPageState> meKey = GlobalKey();
 
@@ -227,9 +227,8 @@ class HomePageState extends ConsumerState<HomePage> {
                       getProviderName(context))),
                   children: [
                     Positioned.fill(
-                      child: TaskPage(
-                        key: taskKey,
-                        loading: !getSystemBeanSuccess,
+                      child: HomeScriptPage(
+                        key: scriptHomeKey,
                       ),
                     ),
                     Positioned.fill(
@@ -288,7 +287,7 @@ class HomePageState extends ConsumerState<HomePage> {
                             if (ref.read<int>((SingleAccountPageState.ofHomeIndexProvider(context)(
                                     getProviderName(context)))) ==
                                 0) {
-                              await taskKey.currentState?.move2Top();
+                              scriptHomeKey.currentState?.move2Top();
                             } else if (ref.read<int>((SingleAccountPageState.ofHomeIndexProvider(
                                     context)(getProviderName(context)))) ==
                                 1) {
@@ -381,7 +380,7 @@ class HomePageState extends ConsumerState<HomePage> {
       IndexBean(
         "assets/images/icon_cron.png",
         "assets/images/icon_cron_checked.png",
-        "定时任务",
+        "脚本",
       ),
     );
     titles.add(
