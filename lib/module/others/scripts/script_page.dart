@@ -12,7 +12,10 @@ import 'package:qinglong_app/base/ui/loading_widget.dart';
 import 'package:qinglong_app/base/ui/search_cell.dart';
 import 'package:qinglong_app/base/ui/tree/models/script_data.dart';
 import 'package:qinglong_app/module/others/scripts/folder_add_page.dart';
+import 'package:qinglong_app/module/others/scripts/script_env_page.dart';
 import 'package:qinglong_app/module/others/scripts/script_upload_page.dart';
+import 'package:qinglong_app/module/task/add_task_page.dart';
+import 'package:qinglong_app/module/task/task_bean.dart';
 import 'package:qinglong_app/utils/extension.dart';
 
 import '../../../base/cupertino_sheet.dart';
@@ -30,6 +33,8 @@ class ScriptPage extends ConsumerStatefulWidget {
 
 class _ScriptPageState extends ConsumerState<ScriptPage> with LazyLoadState<ScriptPage> {
   List<ScriptData> list = [];
+
+  List<TaskBean> tasks = [];
 
   String? path;
 
@@ -152,6 +157,36 @@ class _ScriptPageState extends ConsumerState<ScriptPage> with LazyLoadState<Scri
                 },
                 child: TreeView(
                   controller: _treeViewController,
+                  nodeBuilder: (context, node) {
+                    if (node.isParent) {
+                      var theme = ref.watch(themeProvider);
+                      return Container(
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        child: Row(
+                          children: [
+                            Icon(
+                              node.expanded ? CupertinoIcons.folder_badge_minus : CupertinoIcons.folder_badge_plus,
+                              size: 22,
+                              color: theme.themeColor.titleColor(),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                node.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: theme.themeColor.titleColor(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return _buildScriptCard(context, node);
+                  },
                   onExpansionChanged: (key, state) {
                     ScriptData? node = _treeViewController.getNode(key);
                     if (node != null) {
@@ -243,6 +278,17 @@ class _ScriptPageState extends ConsumerState<ScriptPage> with LazyLoadState<Scri
       list.addAll(response.bean ?? []);
       _treeViewController = TreeViewController(children: list);
       setState(() {});
+      // 同步拉取定时任务，用于脚本卡片上的任务操作（运行/停止/启用/停用/定时/日志）
+      try {
+        HttpResponse<List<TaskBean>> taskResp = await SingleAccountPageState.ofApi(context).crons();
+        if (taskResp.success && mounted) {
+          setState(() {
+            tasks = taskResp.bean ?? [];
+          });
+        }
+      } catch (e) {
+        tasks = [];
+      }
     } else {
       response.message?.toast();
     }
@@ -318,5 +364,312 @@ class _ScriptPageState extends ConsumerState<ScriptPage> with LazyLoadState<Scri
     } else {
       temp.message.toast();
     }
+  }
+
+  // ==================== 脚本卡片与快捷操作 ====================
+
+  /// 根据脚本文件名匹配关联的定时任务（面板任务 command 形如 "task xxx.py"）
+  TaskBean? _findTask(ScriptData node) {
+    for (final t in tasks) {
+      if ((t.command ?? "").contains(node.title)) {
+        return t;
+      }
+    }
+    return null;
+  }
+
+  String _relPath(ScriptData node) {
+    return node.parent.isEmpty ? node.title : "${node.parent}/${node.title}";
+  }
+
+  Widget _actionBtn(String label, VoidCallback onTap, {Color? color}) {
+    return TextButton(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+        minimumSize: const Size(36, 30),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        foregroundColor: color ?? ref.watch(themeProvider).primaryColor,
+        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+      ),
+      child: Text(label, maxLines: 1),
+    );
+  }
+
+  Widget _buildScriptCard(BuildContext context, ScriptData node) {
+    var theme = ref.watch(themeProvider);
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.themeColor.bg2Color(),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: theme.themeColor.settingBordorColor(),
+          width: 0.5,
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  node.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: theme.themeColor.titleColor(),
+                  ),
+                ),
+              ),
+              _actionBtn("日志", () => _openLog(node)),
+              _actionBtn("运行", () => _runScript(node)),
+              _actionBtn("停止", () => _stopScript(node), color: const Color(0xffFB5858)),
+            ],
+          ),
+          Divider(
+            height: 1,
+            thickness: 0.5,
+            color: theme.themeColor.settingBordorColor(),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Wrap(
+                  spacing: 2,
+                  runSpacing: 0,
+                  children: [
+                    _actionBtn("启用", () => _toggleTask(node, true)),
+                    _actionBtn("停用", () => _toggleTask(node, false)),
+                    _actionBtn("编辑", () => _openScriptDetail(node)),
+                    _actionBtn("定时", () => _openSchedule(node)),
+                    _actionBtn("修改", () => _openRename(node)),
+                    _actionBtn("依赖", () => _openDependency()),
+                    _actionBtn("刷新", () => _refreshList()),
+                    _actionBtn("环境变量", () => _openEnv(node)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openLog(ScriptData node) {
+    Navigator.of(context).pushNamed(
+      Routes.routeTaskLog,
+      arguments: {"search": node.title},
+    );
+  }
+
+  void _runScript(ScriptData node) {
+    TaskBean? task = _findTask(node);
+    if (task == null || (task.sId == null && task.id == null)) {
+      showCupertinoDialog(
+        context: context,
+        useRootNavigator: false,
+        builder: (context1) => CupertinoAlertDialog(
+          title: const Text("提示"),
+          content: Text("脚本 ${node.title} 尚未关联定时任务，运行需要先创建定时任务。"),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text("取消"),
+              onPressed: () => Navigator.of(context1).pop(),
+            ),
+            CupertinoDialogAction(
+              child: const Text("去创建"),
+              onPressed: () {
+                Navigator.of(context1).pop();
+                _openSchedule(node);
+              },
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    EasyLoading.show(status: "提交中...");
+    _runCron([task.sId ?? "${task.id}"], "已提交运行");
+  }
+
+  void _runCron(List<String> ids, String successMsg) async {
+    HttpResponse<NullResponse> response = await SingleAccountPageState.ofApi(context).startTasks(ids);
+    EasyLoading.dismiss();
+    if (response.success) {
+      successMsg.toast();
+    } else {
+      "运行失败：${response.message}".toast();
+    }
+  }
+
+  void _stopScript(ScriptData node) {
+    TaskBean? task = _findTask(node);
+    if (task == null || (task.sId == null && task.id == null)) {
+      "该脚本未关联定时任务".toast();
+      return;
+    }
+    EasyLoading.show(status: "提交中...");
+    _stopCron([task.sId ?? "${task.id}"]);
+  }
+
+  void _stopCron(List<String> ids) async {
+    HttpResponse<NullResponse> response = await SingleAccountPageState.ofApi(context).stopTasks(ids);
+    EasyLoading.dismiss();
+    if (response.success) {
+      "已停止".toast();
+    } else {
+      "停止失败：${response.message}".toast();
+    }
+  }
+
+  void _toggleTask(ScriptData node, bool enable) async {
+    TaskBean? task = _findTask(node);
+    if (task == null || (task.sId == null && task.id == null)) {
+      "该脚本未关联定时任务".toast();
+      return;
+    }
+    EasyLoading.show(status: "提交中...");
+    List<String> ids = [task.sId ?? "${task.id}"];
+    HttpResponse<NullResponse> response =
+        enable ? await SingleAccountPageState.ofApi(context).enableTask(ids) : await SingleAccountPageState.ofApi(context).disableTask(ids);
+    EasyLoading.dismiss();
+    if (response.success) {
+      enable ? "已启用".toast() : "已停用".toast();
+    } else {
+      "操作失败：${response.message}".toast();
+    }
+  }
+
+  void _openScriptDetail(ScriptData node) {
+    Navigator.of(context).pushNamed(
+      Routes.routeScriptDetail,
+      arguments: {
+        "title": node.title,
+        "path": node.parent,
+      },
+    ).then((value) {
+      if (value != null && value == true) {
+        loadData();
+      }
+    });
+  }
+
+  void _openSchedule(ScriptData node) {
+    TaskBean? task = _findTask(node);
+    Navigator.of(context)
+        .push(
+      CupertinoPageRoute(
+        builder: (context) => AddTaskPage(
+          taskBean: task ??
+              (TaskBean()
+                ..name = node.title
+                ..command = "task ${_relPath(node)}"
+                ..schedule = ""),
+          hideUploadFile: true,
+        ),
+      ),
+    )
+        .then((value) {
+      loadData();
+    });
+  }
+
+  void _openRename(ScriptData node) {
+    TaskBean? task = _findTask(node);
+    TextEditingController taskNameController = TextEditingController(text: task?.name ?? node.title);
+    TextEditingController scriptNameController = TextEditingController(text: node.title);
+    showCupertinoDialog(
+      context: context,
+      useRootNavigator: false,
+      builder: (context1) => CupertinoAlertDialog(
+        title: const Text("修改名称"),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Column(
+            children: [
+              CupertinoTextField(
+                controller: taskNameController,
+                placeholder: "任务名称（未关联任务则不生效）",
+              ),
+              const SizedBox(height: 8),
+              CupertinoTextField(
+                controller: scriptNameController,
+                placeholder: "脚本名称",
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text("取消"),
+            onPressed: () => Navigator.of(context1).pop(),
+          ),
+          CupertinoDialogAction(
+            child: const Text("确定"),
+            onPressed: () async {
+              String newScriptName = scriptNameController.text.trim();
+              if (newScriptName.isEmpty) {
+                "脚本名称不能为空".toast();
+                return;
+              }
+              Navigator.of(context1).pop();
+              EasyLoading.show(status: "提交中...");
+              if (newScriptName != node.title) {
+                HttpResponse<NullResponse> resp =
+                    await SingleAccountPageState.ofApi(context).renameScript(node.title, node.parent, newScriptName);
+                if (!resp.success) {
+                  EasyLoading.dismiss();
+                  "脚本改名失败：${resp.message}".toast();
+                  return;
+                }
+              }
+              // 同步更新关联任务的名称与命令中的脚本文件名
+              if (task != null && task.sId != null) {
+                String newCommand = (task.command ?? "").replaceAll(node.title, newScriptName);
+                String newTaskName = taskNameController.text.trim();
+                if (newTaskName != task.name || newCommand != task.command) {
+                  HttpResponse<NullResponse> resp = await SingleAccountPageState.ofApi(context).addTask(
+                    newTaskName,
+                    newCommand,
+                    task.schedule ?? "",
+                    id: task.id,
+                    nId: task.sId,
+                  );
+                  if (!resp.success) {
+                    "脚本已改名，但任务更新失败：${resp.message}".toast();
+                  }
+                }
+              }
+              EasyLoading.dismiss();
+              "修改成功".toast();
+              loadData();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openDependency() {
+    Navigator.of(context).pushNamed(Routes.routeDependency);
+  }
+
+  void _refreshList() async {
+    await loadData();
+    "已刷新".toast();
+  }
+
+  void _openEnv(ScriptData node) {
+    Navigator.of(context).push(
+      CupertinoPageRoute(
+        builder: (context) => ScriptEnvPage(scriptName: node.title),
+      ),
+    );
   }
 }

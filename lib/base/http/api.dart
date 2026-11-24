@@ -481,6 +481,17 @@ class Api {
     );
   }
 
+  Future<HttpResponse<NullResponse>> renameScript(String filename, String path, String newFilename) async {
+    return await getIt<Http>(instanceName: index.toString()).put<NullResponse>(
+      getIt<Url>(instanceName: index.toString()).scriptRename,
+      {
+        "filename": filename,
+        "path": path,
+        "newFilename": newFilename,
+      },
+    );
+  }
+
   Future<HttpResponse<String>> scriptDetail(String name, String? path) async {
     // 新版面板(2026-08之后)已下线 GET /scripts/:file，且路径含中文文件名会被
     // protectedPathCase 中间件以 "Invalid path format" 拒绝（URL 编码产生大写 hex）。
