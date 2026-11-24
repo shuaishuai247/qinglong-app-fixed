@@ -481,40 +481,6 @@ class Api {
     );
   }
 
-  Future<HttpResponse<NullResponse>> renameScript(String filename, String path, String newFilename) async {
-    return await getIt<Http>(instanceName: index.toString()).put<NullResponse>(
-      getIt<Url>(instanceName: index.toString()).scriptRename,
-      {
-        "filename": filename,
-        "path": path,
-        "newFilename": newFilename,
-      },
-    );
-  }
-
-  /// 直接运行脚本（面板调试运行，不依赖定时任务）
-  Future<HttpResponse<NullResponse>> runScriptDirect(String filename, String path) async {
-    return await getIt<Http>(instanceName: index.toString()).put<NullResponse>(
-      getIt<Url>(instanceName: index.toString()).scriptRun,
-      {
-        "filename": filename,
-        "path": path,
-        "content": "",
-      },
-    );
-  }
-
-  /// 停止正在运行的脚本（对应面板调试运行）
-  Future<HttpResponse<NullResponse>> stopScriptDirect(String filename, String path) async {
-    return await getIt<Http>(instanceName: index.toString()).put<NullResponse>(
-      getIt<Url>(instanceName: index.toString()).scriptStop,
-      {
-        "filename": filename,
-        "path": path,
-      },
-    );
-  }
-
   Future<HttpResponse<String>> scriptDetail(String name, String? path) async {
     // 新版面板(2026-08之后)已下线 GET /scripts/:file，且路径含中文文件名会被
     // protectedPathCase 中间件以 "Invalid path format" 拒绝（URL 编码产生大写 hex）。

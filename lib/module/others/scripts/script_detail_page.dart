@@ -25,6 +25,7 @@ import '../../code_editor/codemirror/io.dart';
 import '../../code_editor/editor.dart';
 import '../../config/config_detail_page.dart';
 import '../../home/system_bean.dart';
+import 'script_env_page.dart';
 import 'script_upload_page.dart';
 
 class ScriptDetailPage extends ConsumerStatefulWidget {
@@ -79,6 +80,19 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
     super.initState();
     actions.addAll(
       [
+        CupertinoSheer(
+          title: "环境变量",
+          onTap: () {
+            Navigator.of(context).push(
+              CupertinoPageRoute(
+                builder: (context) => ScriptEnvPage(
+                  scriptName: widget.title,
+                ),
+              ),
+            );
+          },
+        ),
+        addDivider(),
         CupertinoSheer(
           title: "添加到任务",
           onTap: () {
