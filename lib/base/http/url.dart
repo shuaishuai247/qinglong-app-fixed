@@ -91,6 +91,10 @@ class Url {
   // 脚本重命名
   get scriptRename => getIt<UserInfoViewModel>(instanceName: index.toString()).useSecretLogined ? "/open/scripts/rename" : "/api/scripts/rename";
 
+  get scriptRun => getIt<UserInfoViewModel>(instanceName: index.toString()).useSecretLogined ? "/open/scripts/run" : "/api/scripts/run";
+
+  get scriptStop => getIt<UserInfoViewModel>(instanceName: index.toString()).useSecretLogined ? "/open/scripts/stop" : "/api/scripts/stop";
+
   get dependencies => getIt<UserInfoViewModel>(instanceName: index.toString()).useSecretLogined ? "/open/dependencies" : "/api/dependencies";
 
   get dependenciesDeleteFocus =>

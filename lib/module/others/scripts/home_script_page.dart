@@ -357,33 +357,26 @@ class HomeScriptPageState extends ConsumerState<HomeScriptPage> {
   }
 
   void _runScript(ScriptData node) {
-    TaskBean? task = _findTask(node);
-    if (task == null || (task.sId == null && task.id == null)) {
-      showCupertinoDialog(
-        context: context,
-        useRootNavigator: false,
-        builder: (context1) => CupertinoAlertDialog(
-          title: const Text("提示"),
-          content: Text("脚本 ${node.title} 尚未关联定时任务，运行需要先创建定时任务。"),
-          actions: [
-            CupertinoDialogAction(
-              child: const Text("取消"),
-              onPressed: () => Navigator.of(context1).pop(),
-            ),
-            CupertinoDialogAction(
-              child: const Text("去创建"),
-              onPressed: () {
-                Navigator.of(context1).pop();
-                _openSchedule(node);
-              },
-            ),
-          ],
-        ),
-      );
-      return;
-    }
     EasyLoading.show(status: "提交中...");
-    _runCron([task.sId ?? "${task.id}"], "已提交运行");
+    _runDirect(node);
+  }
+
+  void _runDirect(ScriptData node) async {
+    HttpResponse<NullResponse> response =
+        await SingleAccountPageState.ofApi(context).runScriptDirect(node.title, node.parent);
+    EasyLoading.dismiss();
+    if (response.success) {
+      "已提交运行，日志可在\"日志\"中查看".toast();
+    } else {
+      // 面板版本较老没有调试运行接口时，回退用关联的定时任务运行
+      TaskBean? task = _findTask(node);
+      if (task != null && (task.sId != null || task.id != null)) {
+        EasyLoading.show(status: "提交中...");
+        _runCron([task.sId ?? "${task.id}"], "已提交运行");
+        return;
+      }
+      "运行失败：${response.message}".toast();
+    }
   }
 
   void _runCron(List<String> ids, String successMsg) async {
@@ -397,13 +390,26 @@ class HomeScriptPageState extends ConsumerState<HomeScriptPage> {
   }
 
   void _stopScript(ScriptData node) {
-    TaskBean? task = _findTask(node);
-    if (task == null || (task.sId == null && task.id == null)) {
-      "该脚本未关联定时任务".toast();
-      return;
-    }
     EasyLoading.show(status: "提交中...");
-    _stopCron([task.sId ?? "${task.id}"]);
+    _stopDirect(node);
+  }
+
+  void _stopDirect(ScriptData node) async {
+    HttpResponse<NullResponse> response =
+        await SingleAccountPageState.ofApi(context).stopScriptDirect(node.title, node.parent);
+    EasyLoading.dismiss();
+    if (response.success) {
+      "已停止".toast();
+    } else {
+      // 回退：停关联定时任务
+      TaskBean? task = _findTask(node);
+      if (task != null && (task.sId != null || task.id != null)) {
+        EasyLoading.show(status: "提交中...");
+        _stopCron([task.sId ?? "${task.id}"]);
+        return;
+      }
+      "停止失败：${response.message}".toast();
+    }
   }
 
   void _stopCron(List<String> ids) async {
