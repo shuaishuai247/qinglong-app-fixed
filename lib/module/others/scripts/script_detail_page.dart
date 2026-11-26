@@ -393,6 +393,15 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
       }
       walk(scriptResp.bean ?? []);
     }
+    // 找原脚本关联的定时任务，用于预填任务名和定时规则
+    HttpResponse<List<TaskBean>> cronResp = await SingleAccountPageState.ofApi(context).crons();
+    TaskBean? linkedTask;
+    for (final t in (cronResp.bean ?? [])) {
+      if ((t.command ?? "").contains(widget.title)) {
+        linkedTask = t;
+        break;
+      }
+    }
     EasyLoading.dismiss();
 
     TextEditingController nameController =
@@ -400,40 +409,84 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
     List<TextEditingController> envNameControllers =
         myEnvs.map((e) => TextEditingController(text: _nextEnvName(e.name ?? "", allEnvs))).toList();
 
+    bool createTask = true;
+    TextEditingController taskNameController = TextEditingController(text: "");
+    TextEditingController scheduleController =
+        TextEditingController(text: linkedTask?.schedule ?? "");
+
     showCupertinoDialog(
       context: context,
       useRootNavigator: false,
-      builder: (context1) => CupertinoAlertDialog(
-        title: const Text("复制脚本"),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 10),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("新脚本名称：",
-                    style: TextStyle(fontSize: 12, color: Color(0xff999999))),
-                CupertinoTextField(controller: nameController),
-                if (myEnvs.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  const Text("专属变量将同步复制，新变量名可自定义：",
+      builder: (context1) => StatefulBuilder(
+        builder: (context1, setDialogState) => CupertinoAlertDialog(
+          title: const Text("复制脚本"),
+          content: Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("新脚本名称：",
                       style: TextStyle(fontSize: 12, color: Color(0xff999999))),
-                  for (int i = 0; i < myEnvs.length; i++) ...[
+                  CupertinoTextField(
+                    controller: nameController,
+                    onChanged: (v) {
+                      if (createTask && taskNameController.text == "") {
+                        setDialogState(() {});
+                      }
+                    },
+                  ),
+                  if (myEnvs.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    const Text("专属变量将同步复制，新变量名可自定义：",
+                        style: TextStyle(fontSize: 12, color: Color(0xff999999))),
+                    for (int i = 0; i < myEnvs.length; i++) ...[
+                      const SizedBox(height: 6),
+                      Text("原变量 ${myEnvs[i].name}",
+                          style: const TextStyle(fontSize: 12, color: Color(0xff666666))),
+                      CupertinoTextField(controller: envNameControllers[i]),
+                    ],
+                  ],
+                  const SizedBox(height: 8),
+                  const Text(
+                    "代码中出现的原变量名会自动替换为新变量名，原脚本不变。",
+                    style: TextStyle(fontSize: 11, color: Color(0xff999999)),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      SizedBox(
+                        height: 26,
+                        child: CupertinoSwitch(
+                          value: createTask,
+                          onChanged: (v) {
+                            setDialogState(() {
+                              createTask = v;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Text("自动创建定时任务",
+                          style: TextStyle(fontSize: 13, color: Color(0xff333333))),
+                    ],
+                  ),
+                  if (createTask) ...[
                     const SizedBox(height: 6),
-                    Text("原变量 ${myEnvs[i].name}",
-                        style: const TextStyle(fontSize: 12, color: Color(0xff666666))),
-                    CupertinoTextField(controller: envNameControllers[i]),
+                    CupertinoTextField(
+                      controller: taskNameController,
+                      placeholder: "任务名称（默认为新脚本名）",
+                    ),
+                    const SizedBox(height: 6),
+                    CupertinoTextField(
+                      controller: scheduleController,
+                      placeholder: "定时规则，如 0 8 * * *（可留空手动运行）",
+                    ),
                   ],
                 ],
-                const SizedBox(height: 8),
-                const Text(
-                  "代码中出现的原变量名会自动替换为新变量名，原脚本不变。",
-                  style: TextStyle(fontSize: 11, color: Color(0xff999999)),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
         actions: [
           CupertinoDialogAction(
             child: const Text("取消"),
@@ -496,11 +549,34 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
                   return;
                 }
               }
+              // 4. 自动创建定时任务
+              if (createTask) {
+                String taskName = taskNameController.text.trim();
+                if (taskName.isEmpty) {
+                  taskName = newName;
+                }
+                String relPath = (widget.path != null && widget.path!.isNotEmpty)
+                    ? "${widget.path}/${newName}"
+                    : newName;
+                String command = "task $relPath";
+                HttpResponse<NullResponse> taskAdd = await SingleAccountPageState.ofApi(context)
+                    .addTask(taskName, command, scheduleController.text.trim());
+                if (!taskAdd.success) {
+                  EasyLoading.dismiss();
+                  "脚本和变量已创建，但定时任务创建失败：${taskAdd.message}\n请到定时任务页手动添加（命令：$command）"
+                      .toast();
+                  return;
+                }
+                EasyLoading.dismiss();
+                "复制完成：已生成 $newName 和对应定时任务".toast();
+                return;
+              }
               EasyLoading.dismiss();
               "复制完成，已生成 $newName".toast();
             },
           ),
         ],
+      ),
       ),
     );
   }
