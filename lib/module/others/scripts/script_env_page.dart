@@ -27,6 +27,26 @@ class ScriptEnvPage extends ConsumerStatefulWidget {
 class _ScriptEnvPageState extends ConsumerState<ScriptEnvPage> {
   bool loading = true;
   List<EnvBean> envs = [];
+  List<EnvBean> allEnvs = [];
+
+  /// 根据面板现有变量，为 [name] 生成下一个可用序号名：
+  /// TOKEN -> TOKEN_2 / TOKEN_3 ...；已带序号的 TOKEN_3 -> TOKEN_4 ...
+  String _nextNumberedName(String name) {
+    RegExp reg = RegExp(r'^(.+)_(\d+)$');
+    String base = name;
+    RegExpMatch? m = reg.firstMatch(name);
+    if (m != null) {
+      base = m.group(1)!;
+    }
+    for (int i = 2; i < 10000; i++) {
+      String candidate = "${base}_$i";
+      bool exists = allEnvs.any((e) => e.name == candidate);
+      if (!exists) {
+        return candidate;
+      }
+    }
+    return "${base}_${DateTime.now().millisecondsSinceEpoch}";
+  }
 
   @override
   void initState() {
@@ -46,6 +66,7 @@ class _ScriptEnvPageState extends ConsumerState<ScriptEnvPage> {
         await SingleAccountPageState.ofApi(context).envs("");
     if (!mounted) return;
     if (response.success && response.bean != null) {
+      allEnvs = response.bean!;
       setState(() {
         envs = response.bean!
             .where((e) => e.remarks != null && e.remarks == widget.scriptName)
@@ -193,6 +214,18 @@ class _ScriptEnvPageState extends ConsumerState<ScriptEnvPage> {
           IconButton(
             visualDensity: VisualDensity.compact,
             icon: Icon(
+              Icons.copy_outlined,
+              size: 20,
+              color: theme.themeColor.descColor(),
+            ),
+            tooltip: "复制一份（自动加序号）",
+            onPressed: () {
+              copyEnv(context, env);
+            },
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: Icon(
               Icons.edit_outlined,
               size: 20,
               color: theme.themeColor.descColor(),
@@ -330,6 +363,83 @@ class _ScriptEnvPageState extends ConsumerState<ScriptEnvPage> {
                 load();
               } else {
                 "添加失败：${response.message}".toast();
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 复制一份变量：变量名自动加序号（保证不与面板现有变量重名），值预填原值可改
+  void copyEnv(BuildContext context, EnvBean env) {
+    String suggestedName = _nextNumberedName(env.name ?? "");
+    TextEditingController nameController =
+        TextEditingController(text: suggestedName);
+    TextEditingController valueController =
+        TextEditingController(text: env.value ?? "");
+    showCupertinoDialog(
+      context: context,
+      useRootNavigator: false,
+      builder: (context1) => CupertinoAlertDialog(
+        title: const Text("复制变量"),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Column(
+            children: [
+              Text(
+                "原变量：${env.name ?? ""}",
+                style: const TextStyle(fontSize: 12, color: Color(0xff999999)),
+              ),
+              const SizedBox(height: 8),
+              CupertinoTextField(
+                controller: nameController,
+                placeholder: "新变量名（已自动加序号）",
+              ),
+              const SizedBox(height: 8),
+              CupertinoTextField(
+                controller: valueController,
+                placeholder: "变量值",
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "归属脚本：${widget.scriptName}",
+                style: const TextStyle(fontSize: 12, color: Color(0xff999999)),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text("取消"),
+            onPressed: () => Navigator.of(context1).pop(),
+          ),
+          CupertinoDialogAction(
+            child: const Text("确定"),
+            onPressed: () async {
+              String newName = nameController.text.trim();
+              if (newName.isEmpty) {
+                "请输入变量名".toast();
+                return;
+              }
+              if (allEnvs.any((e) => e.name == newName)) {
+                "变量名 $newName 已存在，请换一个".toast();
+                return;
+              }
+              Navigator.of(context1).pop();
+              EasyLoading.show(status: "提交中...");
+              HttpResponse<NullResponse> response =
+                  await SingleAccountPageState.ofApi(context).addEnv(
+                newName,
+                valueController.text,
+                widget.scriptName,
+              );
+              EasyLoading.dismiss();
+              if (response.success) {
+                "已复制为 $newName".toast();
+                load();
+              } else {
+                "复制失败：${response.message}".toast();
               }
             },
           ),
