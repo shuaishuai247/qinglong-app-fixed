@@ -236,9 +236,11 @@ class Api {
     var data = <String, dynamic>{"name": name, "command": command, "schedule": cron};
 
     if (id != null || nId != null) {
+      // 新版面板认数字 id，老版认 _id，都带上以兼容
       if (id != null) {
         data["id"] = id;
-      } else if (nId != null) {
+      }
+      if (nId != null) {
         data["_id"] = nId;
       }
       return await getIt<Http>(instanceName: index.toString()).put<NullResponse>(
@@ -378,9 +380,11 @@ class Api {
     };
 
     if (id != null || nId != null) {
+      // 新版面板(SQLite)认数字 id，老版(MongoDB)认 _id，两个都带上以兼容
       if (id != null) {
         data["id"] = id;
-      } else if (nId != null) {
+      }
+      if (nId != null) {
         data["_id"] = nId;
       }
       return await getIt<Http>(instanceName: index.toString()).put<NullResponse>(
@@ -545,6 +549,18 @@ class Api {
     return await getIt<Http>(instanceName: index.toString()).post<String>(
       getIt<Url>(instanceName: index.toString()).dependencies,
       list,
+    );
+  }
+
+  /// 重命名脚本文件：PUT /scripts/rename {filename, path, newFilename}
+  Future<HttpResponse<NullResponse>> renameScript(String filename, String path, String newFilename) async {
+    return await getIt<Http>(instanceName: index.toString()).put<NullResponse>(
+      getIt<Url>(instanceName: index.toString()).scriptRename,
+      {
+        "filename": filename,
+        "path": path,
+        "newFilename": newFilename,
+      },
     );
   }
 

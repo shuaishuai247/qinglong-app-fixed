@@ -101,6 +101,11 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
         ),
         addDivider(),
         CupertinoSheer(
+          title: "重命名",
+          onTap: _renameScript,
+        ),
+        addDivider(),
+        CupertinoSheer(
           title: "添加到任务",
           onTap: () {
             if (content == null || content!.isEmpty) {
@@ -322,6 +327,137 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
     } else {
       response.message?.toast();
     }
+  }
+
+  /// 重命名：脚本文件名 + 关联任务名称，都可修改
+  void _renameScript() async {
+    EasyLoading.show(status: "读取中...");
+    // 找关联的定时任务（命令里包含本脚本名的）
+    HttpResponse<List<TaskBean>> cronResp = await SingleAccountPageState.ofApi(context).crons();
+    List<TaskBean> linkedTasks = (cronResp.bean ?? [])
+        .where((t) => (t.command ?? "").contains(widget.title))
+        .toList();
+    EasyLoading.dismiss();
+
+    TextEditingController scriptNameController =
+        TextEditingController(text: widget.title);
+    TextEditingController taskNameController = TextEditingController(
+        text: linkedTasks.isNotEmpty ? (linkedTasks.first.name ?? "") : "");
+
+    showCupertinoDialog(
+      context: context,
+      useRootNavigator: false,
+      builder: (context1) => CupertinoAlertDialog(
+        title: const Text("重命名"),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("脚本名称：",
+                  style: TextStyle(fontSize: 12, color: Color(0xff999999))),
+              CupertinoTextField(controller: scriptNameController),
+              const SizedBox(height: 8),
+              Text(
+                linkedTasks.isNotEmpty
+                    ? "任务名称（${linkedTasks.length} 个关联任务）："
+                    : "任务名称（未找到关联任务）：",
+                style: const TextStyle(fontSize: 12, color: Color(0xff999999)),
+              ),
+              CupertinoTextField(controller: taskNameController),
+              const SizedBox(height: 6),
+              const Text(
+                "改脚本名后，关联任务的执行命令会自动同步更新。",
+                style: TextStyle(fontSize: 11, color: Color(0xff999999)),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text("取消"),
+            onPressed: () => Navigator.of(context1).pop(),
+          ),
+          CupertinoDialogAction(
+            child: const Text("确定"),
+            onPressed: () async {
+              String newScriptName = scriptNameController.text.trim();
+              String newTaskName = taskNameController.text.trim();
+              if (newScriptName.isEmpty) {
+                "请输入脚本名称".toast();
+                return;
+              }
+              if (newScriptName != widget.title) {
+                // 查重：新脚本名不能已存在
+                HttpResponse<List<ScriptData>> scriptResp =
+                    await SingleAccountPageState.ofApi(context).scripts();
+                bool exists = false;
+                void walk(List<ScriptData> nodes) {
+                  for (final n in nodes) {
+                    if (n.isParent) {
+                      walk(n.children);
+                    } else if (n.title == newScriptName) {
+                      exists = true;
+                    }
+                  }
+                }
+                walk(scriptResp.bean ?? []);
+                if (exists) {
+                  "脚本 $newScriptName 已存在，请换一个名字".toast();
+                  return;
+                }
+              }
+              if (newTaskName.isEmpty && linkedTasks.isNotEmpty) {
+                "请输入任务名称".toast();
+                return;
+              }
+              Navigator.of(context1).pop();
+              // 1. 改脚本文件名
+              if (newScriptName != widget.title) {
+                EasyLoading.show(status: "改名中...");
+                HttpResponse<NullResponse> renameResp =
+                    await SingleAccountPageState.ofApi(context)
+                        .renameScript(widget.title, widget.path ?? "", newScriptName);
+                if (!renameResp.success) {
+                  EasyLoading.dismiss();
+                  "脚本改名失败：${renameResp.message}".toast();
+                  return;
+                }
+                EasyLoading.dismiss();
+              }
+              // 2. 同步更新关联任务：名称 + 命令里的脚本名
+              if (linkedTasks.isNotEmpty) {
+                EasyLoading.show(status: "更新任务中...");
+                for (final t in linkedTasks) {
+                  String newCommand =
+                      (t.command ?? "").replaceAll(widget.title, newScriptName);
+                  HttpResponse<NullResponse> taskResp =
+                      await SingleAccountPageState.ofApi(context).addTask(
+                    newTaskName,
+                    newCommand,
+                    t.schedule ?? "",
+                    id: t.id,
+                    nId: t.sId,
+                  );
+                  if (!taskResp.success) {
+                    EasyLoading.dismiss();
+                    "脚本已改名，但任务更新失败：${taskResp.message}\n请手动到定时任务里修改命令"
+                        .toast();
+                    return;
+                  }
+                }
+                EasyLoading.dismiss();
+              }
+              "重命名成功".toast();
+              // 改完文件名，当前详情页还是旧文件，返回列表刷新
+              if (mounted && Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -570,6 +706,15 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
               }
               Navigator.of(context1).pop();
               EasyLoading.show(status: "复制中...");
+              // 0. 清理同名旧脚本残留的变量（脚本删了但变量还在面板里，备注仍指向这个名字）
+              List<String> orphanIds = allEnvs
+                  .where((e) => (e.remarks ?? "") == newName)
+                  .map((e) => e.sId ?? "")
+                  .where((s) => s.isNotEmpty)
+                  .toList();
+              if (orphanIds.isNotEmpty) {
+                await SingleAccountPageState.ofApi(context).delEnvs(orphanIds);
+              }
               // 1. 代码替换：整词替换旧变量名 -> 新变量名
               String newContent = content!;
               for (int i = 0; i < myEnvs.length; i++) {

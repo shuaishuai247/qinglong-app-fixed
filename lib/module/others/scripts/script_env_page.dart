@@ -495,6 +495,7 @@ class _ScriptEnvPageState extends ConsumerState<ScriptEnvPage> {
                 nameController.text.trim(),
                 valueController.text,
                 widget.scriptName,
+                id: env.id,
                 nId: env.nId,
               );
               EasyLoading.dismiss();

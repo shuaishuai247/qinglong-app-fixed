@@ -89,6 +89,8 @@ class Url {
   // 新版面板读取脚本内容接口（文件名放 query，避免中文文件名编码后触发路径大小写校验）
   get scriptFileDetail => getIt<UserInfoViewModel>(instanceName: index.toString()).useSecretLogined ? "/open/scripts/detail" : "/api/scripts/detail";
 
+  get scriptRename => getIt<UserInfoViewModel>(instanceName: index.toString()).useSecretLogined ? "/open/scripts/rename" : "/api/scripts/rename";
+
   get dependencies => getIt<UserInfoViewModel>(instanceName: index.toString()).useSecretLogined ? "/open/dependencies" : "/api/dependencies";
 
   get dependenciesDeleteFocus =>
