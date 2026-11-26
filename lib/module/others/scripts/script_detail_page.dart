@@ -376,8 +376,17 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
     // 全量变量，用于查重与算序号
     HttpResponse<List<EnvBean>> envResp = await SingleAccountPageState.ofApi(context).envs("");
     List<EnvBean> allEnvs = envResp.success ? (envResp.bean ?? []) : [];
-    // 本脚本专属变量
+    // 本脚本专属变量（备注 == 脚本名）
     List<EnvBean> myEnvs = allEnvs.where((e) => e.remarks != null && e.remarks == widget.title).toList();
+    // 兜底：无论备注怎么填，只要脚本代码里实际引用了这个面板变量，就纳入改名复制
+    for (final e in allEnvs) {
+      final n = e.name ?? "";
+      if (n.isEmpty) continue;
+      if (myEnvs.any((m) => m.name == n)) continue;
+      if (RegExp("\\b${RegExp.escape(n)}\\b").hasMatch(content!)) {
+        myEnvs.add(e);
+      }
+    }
     // 现有脚本文件名，用于新文件名查重
     HttpResponse<List<ScriptData>> scriptResp = await SingleAccountPageState.ofApi(context).scripts();
     List<String> existNames = [];
@@ -408,6 +417,9 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
         TextEditingController(text: _nextScriptFileName(widget.title, existNames));
     List<TextEditingController> envNameControllers =
         myEnvs.map((e) => TextEditingController(text: _nextEnvName(e.name ?? "", allEnvs))).toList();
+    // 值默认带过来，可直接改
+    List<TextEditingController> envValueControllers =
+        myEnvs.map((e) => TextEditingController(text: e.value ?? "")).toList();
 
     bool createTask = true;
     TextEditingController taskNameController = TextEditingController(text: "");
@@ -438,14 +450,35 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
                   ),
                   if (myEnvs.isNotEmpty) ...[
                     const SizedBox(height: 10),
-                    const Text("专属变量将同步复制，新变量名可自定义：",
+                    const Text("检测到脚本用到以下变量，新变量名/值均可自定义：",
                         style: TextStyle(fontSize: 12, color: Color(0xff999999))),
-                    for (int i = 0; i < myEnvs.length; i++) ...[
-                      const SizedBox(height: 6),
-                      Text("原变量 ${myEnvs[i].name}",
-                          style: const TextStyle(fontSize: 12, color: Color(0xff666666))),
-                      CupertinoTextField(controller: envNameControllers[i]),
-                    ],
+                    SizedBox(
+                      height: myEnvs.length > 2 ? 240 : null,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (int i = 0; i < myEnvs.length; i++) ...[
+                              const SizedBox(height: 6),
+                              Text("${myEnvs[i].name}  →  新变量名：",
+                                  style: const TextStyle(fontSize: 12, color: Color(0xff666666))),
+                              CupertinoTextField(controller: envNameControllers[i], placeholder: "新变量名"),
+                              const SizedBox(height: 4),
+                              const Text("值（默认带过来，可改）：",
+                                  style: TextStyle(fontSize: 11, color: Color(0xff999999))),
+                              CupertinoTextField(
+                                controller: envValueControllers[i],
+                                placeholder: "变量值",
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 10),
+                    const Text("未检测到本脚本引用的面板变量，将只复制脚本文件。",
+                        style: TextStyle(fontSize: 12, color: Color(0xff999999))),
                   ],
                   const SizedBox(height: 8),
                   const Text(
@@ -520,6 +553,10 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
                   "变量名 $n 已存在，请换一个".toast();
                   return;
                 }
+                if (newEnvNames.contains(n)) {
+                  "新变量名 $n 重复了，请换一个".toast();
+                  return;
+                }
                 newEnvNames.add(n);
               }
               // 校验定时规则：留空=一次性任务；否则须是 5 段式 cron
@@ -547,10 +584,14 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
                 "创建脚本失败：${addResp.message}".toast();
                 return;
               }
-              // 3. 复制专属变量（备注指向新脚本）
+              // 3. 复制变量（新名 + 弹窗里的值，备注指向新脚本）
               for (int i = 0; i < myEnvs.length; i++) {
+                String val = envValueControllers[i].text;
+                if (val.isEmpty) {
+                  val = myEnvs[i].value ?? "";
+                }
                 HttpResponse<NullResponse> envAdd = await SingleAccountPageState.ofApi(context)
-                    .addEnv(newEnvNames[i], myEnvs[i].value ?? "", newName);
+                    .addEnv(newEnvNames[i], val, newName);
                 if (!envAdd.success) {
                   EasyLoading.dismiss();
                   "脚本已创建，但变量 ${newEnvNames[i]} 添加失败：${envAdd.message}\n请到新脚本的环境变量页手动添加"
