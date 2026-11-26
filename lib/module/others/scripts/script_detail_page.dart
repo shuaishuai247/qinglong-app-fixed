@@ -13,6 +13,8 @@ import 'package:qinglong_app/base/single_account_page.dart';
 import 'package:qinglong_app/base/theme.dart';
 import 'package:qinglong_app/base/ui/lazy_load_state.dart';
 import 'package:qinglong_app/base/ui/loading_widget.dart';
+import 'package:qinglong_app/base/ui/tree/models/script_data.dart';
+import 'package:qinglong_app/module/env/env_bean.dart';
 import 'package:qinglong_app/module/task/add_task_page.dart';
 import 'package:qinglong_app/module/task/task_bean.dart';
 import 'package:qinglong_app/utils/extension.dart';
@@ -91,6 +93,11 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
               ),
             );
           },
+        ),
+        addDivider(),
+        CupertinoSheer(
+          title: "复制脚本",
+          onTap: _copyScript,
         ),
         addDivider(),
         CupertinoSheer(
@@ -320,5 +327,181 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
   @override
   void onLazyLoad() {
     loadData();
+  }
+
+  // ==================== 复制脚本（多开） ====================
+
+  /// 生成不重名的新脚本文件名：肚肚.py -> 肚肚_2.py / 肚肚_3.py ...
+  String _nextScriptFileName(String title, List<String> existNames) {
+    String ext = "";
+    String base = title;
+    int dot = title.lastIndexOf(".");
+    if (dot > 0) {
+      base = title.substring(0, dot);
+      ext = title.substring(dot);
+    }
+    for (int i = 2; i < 10000; i++) {
+      String candidate = "${base}_$i$ext";
+      if (!existNames.contains(candidate)) {
+        return candidate;
+      }
+    }
+    return "${base}_${DateTime.now().millisecondsSinceEpoch}$ext";
+  }
+
+  /// 生成不与面板现有变量重名的新变量名
+  String _nextEnvName(String name, List<EnvBean> allEnvs) {
+    RegExp reg = RegExp(r"^(.+)_(\d+)$");
+    String base = name;
+    RegExpMatch? m = reg.firstMatch(name);
+    if (m != null) {
+      base = m.group(1)!;
+    }
+    for (int i = 2; i < 10000; i++) {
+      String candidate = "${base}_$i";
+      if (!allEnvs.any((e) => e.name == candidate)) {
+        return candidate;
+      }
+    }
+    return "${base}_${DateTime.now().millisecondsSinceEpoch}";
+  }
+
+  /// 复制脚本：新建脚本文件 + 代码中的变量名按自定义替换 + 复制专属环境变量（新名，备注指向新脚本）
+  void _copyScript() async {
+    if (content == null || content!.isEmpty) {
+      "未获取到脚本内容,请稍候重试".toast();
+      return;
+    }
+    EasyLoading.show(status: "读取中...");
+    // 全量变量，用于查重与算序号
+    HttpResponse<List<EnvBean>> envResp = await SingleAccountPageState.ofApi(context).envs("");
+    List<EnvBean> allEnvs = envResp.success ? (envResp.bean ?? []) : [];
+    // 本脚本专属变量
+    List<EnvBean> myEnvs = allEnvs.where((e) => e.remarks != null && e.remarks == widget.title).toList();
+    // 现有脚本文件名，用于新文件名查重
+    HttpResponse<List<ScriptData>> scriptResp = await SingleAccountPageState.ofApi(context).scripts();
+    List<String> existNames = [];
+    if (scriptResp.success) {
+      void walk(List<ScriptData> nodes) {
+        for (final n in nodes) {
+          if (n.isParent) {
+            walk(n.children);
+          } else {
+            existNames.add(n.title);
+          }
+        }
+      }
+      walk(scriptResp.bean ?? []);
+    }
+    EasyLoading.dismiss();
+
+    TextEditingController nameController =
+        TextEditingController(text: _nextScriptFileName(widget.title, existNames));
+    List<TextEditingController> envNameControllers =
+        myEnvs.map((e) => TextEditingController(text: _nextEnvName(e.name ?? "", allEnvs))).toList();
+
+    showCupertinoDialog(
+      context: context,
+      useRootNavigator: false,
+      builder: (context1) => CupertinoAlertDialog(
+        title: const Text("复制脚本"),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("新脚本名称：",
+                    style: TextStyle(fontSize: 12, color: Color(0xff999999))),
+                CupertinoTextField(controller: nameController),
+                if (myEnvs.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  const Text("专属变量将同步复制，新变量名可自定义：",
+                      style: TextStyle(fontSize: 12, color: Color(0xff999999))),
+                  for (int i = 0; i < myEnvs.length; i++) ...[
+                    const SizedBox(height: 6),
+                    Text("原变量 ${myEnvs[i].name}",
+                        style: const TextStyle(fontSize: 12, color: Color(0xff666666))),
+                    CupertinoTextField(controller: envNameControllers[i]),
+                  ],
+                ],
+                const SizedBox(height: 8),
+                const Text(
+                  "代码中出现的原变量名会自动替换为新变量名，原脚本不变。",
+                  style: TextStyle(fontSize: 11, color: Color(0xff999999)),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text("取消"),
+            onPressed: () => Navigator.of(context1).pop(),
+          ),
+          CupertinoDialogAction(
+            child: const Text("确定"),
+            onPressed: () async {
+              String newName = nameController.text.trim();
+              if (newName.isEmpty) {
+                "请输入新脚本名称".toast();
+                return;
+              }
+              if (existNames.contains(newName)) {
+                "脚本 $newName 已存在，请换一个名字".toast();
+                return;
+              }
+              // 校验变量映射
+              List<String> newEnvNames = [];
+              for (int i = 0; i < myEnvs.length; i++) {
+                String n = envNameControllers[i].text.trim();
+                if (n.isEmpty) {
+                  "请为变量 ${myEnvs[i].name} 填写新变量名".toast();
+                  return;
+                }
+                if (n == myEnvs[i].name) {
+                  "新变量名不能与原变量名 ${myEnvs[i].name} 相同".toast();
+                  return;
+                }
+                if (allEnvs.any((e) => e.name == n)) {
+                  "变量名 $n 已存在，请换一个".toast();
+                  return;
+                }
+                newEnvNames.add(n);
+              }
+              Navigator.of(context1).pop();
+              EasyLoading.show(status: "复制中...");
+              // 1. 代码替换：整词替换旧变量名 -> 新变量名
+              String newContent = content!;
+              for (int i = 0; i < myEnvs.length; i++) {
+                RegExp reg = RegExp("\\b${RegExp.escape(myEnvs[i].name ?? "")}\\b");
+                newContent = newContent.replaceAllMapped(reg, (m) => newEnvNames[i]);
+              }
+              // 2. 新建脚本文件
+              HttpResponse<NullResponse> addResp = await SingleAccountPageState.ofApi(context)
+                  .addScript(newName, widget.path ?? "", newContent);
+              if (!addResp.success) {
+                EasyLoading.dismiss();
+                "创建脚本失败：${addResp.message}".toast();
+                return;
+              }
+              // 3. 复制专属变量（备注指向新脚本）
+              for (int i = 0; i < myEnvs.length; i++) {
+                HttpResponse<NullResponse> envAdd = await SingleAccountPageState.ofApi(context)
+                    .addEnv(newEnvNames[i], myEnvs[i].value ?? "", newName);
+                if (!envAdd.success) {
+                  EasyLoading.dismiss();
+                  "脚本已创建，但变量 ${newEnvNames[i]} 添加失败：${envAdd.message}\n请到新脚本的环境变量页手动添加"
+                      .toast();
+                  return;
+                }
+              }
+              EasyLoading.dismiss();
+              "复制完成，已生成 $newName".toast();
+            },
+          ),
+        ],
+      ),
+    );
   }
 }
