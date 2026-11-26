@@ -480,7 +480,7 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
                     const SizedBox(height: 6),
                     CupertinoTextField(
                       controller: scheduleController,
-                      placeholder: "定时规则，如 0 8 * * *（可留空手动运行）",
+                      placeholder: "定时规则，如 0 8 * * *（留空=一次性任务，手动运行）",
                     ),
                   ],
                 ],
@@ -522,6 +522,15 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
                 }
                 newEnvNames.add(n);
               }
+              // 校验定时规则：留空=一次性任务；否则须是 5 段式 cron
+              String cronInput = scheduleController.text.trim();
+              if (cronInput.isNotEmpty && !cronInput.startsWith("once") && !cronInput.startsWith("boot")) {
+                List<String> parts = cronInput.split(RegExp(r"\s+"));
+                if (parts.length != 5) {
+                  "定时规则格式不对，应为 5 段式 cron（如 0 8 * * *），或留空创建一次性任务".toast();
+                  return;
+                }
+              }
               Navigator.of(context1).pop();
               EasyLoading.show(status: "复制中...");
               // 1. 代码替换：整词替换旧变量名 -> 新变量名
@@ -559,8 +568,13 @@ class _ScriptDetailPageState extends ConsumerState<ScriptDetailPage> with LazyLo
                     ? "${widget.path}/${newName}"
                     : newName;
                 String command = "task $relPath";
+                // 新版青龙定时规则必填；留空时用 "once"（一次性任务，面板里手动运行）
+                String cron = scheduleController.text.trim();
+                if (cron.isEmpty) {
+                  cron = "once";
+                }
                 HttpResponse<NullResponse> taskAdd = await SingleAccountPageState.ofApi(context)
-                    .addTask(taskName, command, scheduleController.text.trim());
+                    .addTask(taskName, command, cron);
                 if (!taskAdd.success) {
                   EasyLoading.dismiss();
                   "脚本和变量已创建，但定时任务创建失败：${taskAdd.message}\n请到定时任务页手动添加（命令：$command）"
